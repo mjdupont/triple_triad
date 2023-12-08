@@ -1,74 +1,13 @@
-#[path="game_move.rs"] mod game_move;
-#[path="game_elements.rs"] mod game_elements;
 use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
-#[allow(unstable_name_collisions)]
-
-use std::{str::FromStr, fmt, ops::RangeInclusive, collections::HashMap};
+use std::{fmt, collections::HashMap};
 use colored::Colorize;
 use itertools::*;
 
 use mcts::{*, tree_policy::UCTPolicy, transposition_table::{ApproxTable, TranspositionHash}};
 
+use crate::types::*;
 
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Row
-{ Top = 0
-, Middle = 1
-, Bottom = 2
-} impl Row {
-  fn idx(self) -> usize { self as usize }
-  fn from_idx(idx:usize) -> Option<Row> {
-    match idx {
-      0 => Some(Row::Top),
-      1 => Some(Row::Middle),
-      2 => Some(Row::Bottom),
-      _ => None
-    }
-  }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Column
-{ Left = 0
-, Middle = 1
-, Right = 2
-} impl Column {
-  fn idx(self) -> usize { self as usize }
-  fn from_idx(idx:usize) -> Option<Column> {
-    match idx {
-      0 => Some(Column::Left),
-      1 => Some(Column::Middle),
-      2 => Some(Column::Right),
-      _ => None
-    }
-  }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Coord
-{ pub row: Row
-, pub col: Column
-} impl FromStr for Coord {
-  type Err = std::num::ParseIntError;
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let coords: Vec<&str> = s.trim()
-                              .split(',')
-                              .collect();
-    println!("{:?}", coords);
-    let row = Row::from_idx(coords[0].parse::<usize>().unwrap() - 1).unwrap();
-    let col = Column::from_idx(coords[1].parse::<usize>().unwrap() - 1).unwrap();
-    Ok(Coord {row, col})
-  }
-} impl Coord {
-  fn from_numbers(row: usize, col: usize) -> Option<Self>{
-    match (Row::from_idx(row), Column::from_idx(col)) {
-      (Some(row), Some(col)) => Some(Coord {row,col}),
-      _ => None
-    }
-  }
-}
-
+#[allow(dead_code)]
 pub fn valid_hand_idx(hand: &Hand, s:&str) -> Result<usize, String>{
   match s.parse::<usize>() {
     Err(_e) => Err("Failed to parse input as an int!".to_string()),
@@ -79,36 +18,47 @@ pub fn valid_hand_idx(hand: &Hand, s:&str) -> Result<usize, String>{
   }
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct GameCard
+{ pub card: Card
+, pub player: Option<Player>
+}
+impl fmt::Display for GameCard {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    let tribe = self.card.stats.tribe.map(|t| t.to_string()).unwrap_or(" ".to_string());
+    
+    let color_line = |x:&String| match self.player {
+      None => x.white().to_string(),
+      Some(Player::Red) => x.red().to_string(),
+      Some(Player::Blue) => x.blue().to_string()
+    };
+    let card_top = format!("{}{}{}", "╔".to_string().yellow(), color_line(&"━━━━━".to_string()), "╗".to_string().yellow());
+    let top     = format!("{}{}{}", color_line(&format!("┃  {} ",format_number(self.card.stats.top))), tribe, color_line(&"┃".to_string()));
+    let middle  = color_line(&format!("┃{} {} {}┃", format_number(self.card.stats.left), " ", format_number(self.card.stats.right)));
+    let bottom  = color_line(&format!("┃{} {} {}┃", " ", format_number(self.card.stats.bottom), " "));
+    let card_bottom = format!("{}{}{}", "╚".to_string().yellow(), color_line(&"━━━━━".to_string()), "╝".to_string().yellow());
+    let out = vec![card_top, top, middle, bottom, card_bottom];
+    write!(f, "{}", out.join("\n"))
+  }
+} 
+impl GameCard {
+  pub fn flip(&self) -> GameCard {
+    let mut out = self.clone();
+    out.player = out.player.map(|x| match x { Player::Blue => Player::Red, Player::Red => Player::Blue});
+    out
+  }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Move
-{ card: Card
+{ card: GameCard
 , coords: Coord
 , player: Player
 , is_combo: bool
 } impl Move {
-  pub fn new(card:Card, coords:Coord, player:Player) -> Move {
+  pub fn new(card:GameCard, coords:Coord, player:Player) -> Move {
     Move { card:card, coords:coords, player:player, is_combo:false }
-  }
-}
-
-
-
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Tribe {
-  Beastman,
-  Scion,
-  Garlean,
-  Primal,
-} impl fmt::Display for Tribe {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let out = match self {
-      Tribe::Beastman => "*".green().to_string(),
-      Tribe::Garlean => "*".blue().to_string(),
-      Tribe::Primal => "*".red().to_string(),
-      Tribe::Scion => "*".yellow().to_string()
-    };
-    write!(f, "{}", out)
   }
 }
 
@@ -127,6 +77,14 @@ impl fmt::Display for Player {
     
   }
 }
+impl Player {
+  fn other(&self) -> Player {
+    match self {
+      Player::Red => Player::Blue,
+      Player::Blue => Player::Red
+    }
+  }
+}
 
 fn format_number(number:usize) -> String {
   match number {
@@ -136,45 +94,9 @@ fn format_number(number:usize) -> String {
   }
 }
 
-
+#[allow(dead_code)]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub struct Card 
-{ pub name: String
-, pub top : usize
-, pub right: usize
-, pub bottom: usize
-, pub left: usize
-, pub tribe: Option<Tribe>
-, pub player: Option<Player>
-} 
-impl fmt::Display for Card {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let tribe = self.tribe.map(|t| t.to_string()).unwrap_or(" ".to_string());
-    
-    let color_line = |x:&String| match self.player {
-      None => x.white().to_string(),
-      Some(Player::Red) => x.red().to_string(),
-      Some(Player::Blue) => x.blue().to_string()
-    };
-    let card_top = format!("{}{}{}", "╔".to_string().yellow(), color_line(&"━━━━━".to_string()), "╗".to_string().yellow());
-    let top     = format!("{}{}{}", color_line(&format!("┃  {} ",format_number(self.top))), tribe, color_line(&"┃".to_string()));
-    let middle  = color_line(&format!("┃{} {} {}┃", format_number(self.left), " ", format_number(self.right)));
-    let bottom  = color_line(&format!("┃{} {} {}┃", " ", format_number(self.bottom), " "));
-    let card_bottom = format!("{}{}{}", "╚".to_string().yellow(), color_line(&"━━━━━".to_string()), "╝".to_string().yellow());
-    let out = vec![card_top, top, middle, bottom, card_bottom];
-    write!(f, "{}", out.join("\n"))
-  }
-} 
-impl Card {
-  pub fn flip(&self) -> Card {
-    let mut out = self.clone();
-    out.player = out.player.map(|x| match x { Player::Blue => Player::Red, Player::Red => Player::Blue});
-    out
-  }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub struct Square(pub Option<Card>);
+pub struct Square(pub Option<GameCard>);
 impl fmt::Display for Square {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     let out = match self {
@@ -191,28 +113,12 @@ impl fmt::Display for Square {
   }
 }
 impl Square {
-  pub fn new(card:Card) -> Self {
+  pub fn new(card:GameCard) -> Self {
     Self(Some(card))
   }
   pub fn flip(self) -> Square {
     let Square(sq) = self;
     Square(sq.map(|card| card.clone().flip()))
-  }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
-pub struct Score(pub isize);
-impl fmt::Display for Score {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let out = match self {
-      Score(x) if (-4..=4).contains(x) => {
-        let blue_score = "[]".to_string().repeat((5 + x).try_into().unwrap()).blue().to_string();
-        let red_score = "[]".to_string().repeat((5 - x).try_into().unwrap()).red().to_string();
-        format!("     {}║{}     ", blue_score, red_score)
-      },
-      _ => "   ##########ERROR##########   ".to_string()
-    };
-    write!(f, "{}", out)
   }
 }
 
@@ -368,6 +274,7 @@ pub enum GameResult
 , Win(Player)
 }
 
+#[allow(dead_code)]
 pub enum MoveResult
 { Finished(GameResult)
 , Combo(Vec<Move>)
@@ -382,6 +289,7 @@ enum Side
 , Left
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Rule
 { AllOpen
@@ -397,13 +305,29 @@ pub enum Rule
 }
 
 
+
+fn format_score(score:isize) -> String {
+  let out = match score {
+    score if (-4..=4).contains(&score) => {
+      let blue_score = "[]".to_string().repeat((5 + score).try_into().unwrap()).blue().to_string();
+      let red_score = "[]".to_string().repeat((5 - score).try_into().unwrap()).red().to_string();
+      format!("     {}║{}     ", blue_score, red_score)
+    },
+    _ => "   ##########ERROR##########   ".to_string()
+  };
+  out
+}
+
+
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Game
 { pub board: Board
 , pub hands: HashMap<Player, Hand>
 , pub turn: Player
 , pub first_player : Player
-, pub score_blue: Score
+, pub my_color : Player
+//, pub score_blue: Score
 , pub rules: Vec<Rule>
 } 
 impl fmt::Display for Game {
@@ -428,16 +352,26 @@ impl fmt::Display for Game {
       .map(|(bhand, board, rhand)| format!("{}   {}   {}", bhand, board, rhand).to_string())
       .join("\n");
 
-    write!(f, "\n{0}   {1}   {0}\n{2}\n", hand_padding, self.score_blue, out)
+    let score = self.get_score(&Player::Blue);
+
+    write!(f, "\n{0}   {1}   {0}\n{2}\n", hand_padding, format_score(score), out)
   }
 }
 impl Game {
   fn open_squares(&self) -> Vec<Coord> {
-    let all_indices = (0..3).cartesian_product((0..3));
+    let all_indices = (0..3).cartesian_product(0..3);
     all_indices
     .filter(|(row, col)| self.board.0[*row as usize][*col as usize].0.is_none())
     .map(|(row, col)| Coord{row:Row::from_idx(row).unwrap(), col:Column::from_idx(col).unwrap()}) 
     .collect::<Vec<Coord>>()
+  }
+
+
+
+  pub fn get_score(&self, player:&Player) -> isize {
+    let cards_in_hand = self.hands[player].0.iter().filter(|x| (*x).0.is_some()).collect::<Vec<&Square>>().len();
+    let cards_on_board = self.board.0.iter().flatten().filter_map(|x| x.clone().0).filter(|x| x.player == Some(*player)).collect::<Vec<GameCard>>().len();
+    (cards_in_hand as isize + cards_on_board as isize) - 5
   }
 
 
@@ -453,7 +387,7 @@ impl Game {
 
 
   fn get_valid_moves(&self) -> Vec<Move> {
-    let cards = self.hands[&self.turn].0.iter().filter_map(|x| x.0).collect::<Vec<Card>>();
+    let cards = self.hands[&self.turn].0.iter().filter_map(|x| x.0.clone()).collect::<Vec<GameCard>>();
     let spaces = self.open_squares();
     let cartesian_product = itertools::iproduct!(cards, spaces).map(|(card, coord)| Move::new(card, coord, self.turn)).collect::<Vec<Move>>();
     cartesian_product
@@ -461,13 +395,13 @@ impl Game {
 
 
 
-  fn add_card_to_board(&mut self, user_move:Move) -> () {
-    self.board.0[user_move.coords.row.idx()][user_move.coords.col.idx()] = Square::new(user_move.card)
+  fn add_card_to_board(&mut self, user_move:&Move) -> () {
+    self.board.0[user_move.coords.row.idx()][user_move.coords.col.idx()] = Square::new(user_move.card.clone())
   }
 
 
-
-  pub fn add_card_to_hand(&mut self, mut new_card:Card, player:Player) -> &mut Game {
+  #[allow(dead_code)]
+  pub fn add_card_to_hand(&mut self, mut new_card:GameCard, player:Player) -> &mut Game {
     new_card.player = Some(player);
   
 
@@ -496,8 +430,8 @@ impl Game {
 
 
 
-  fn play_move(&mut self, user_move:Move) -> () {
-    println!("Playing {} card {} at {} {}!", user_move.card.player.unwrap(), user_move.card.name, user_move.coords.row.idx(), user_move.coords.col.idx());
+  fn play_move(&mut self, user_move:&Move) -> () {
+    //println!("Playing {} card {} at {} {}!", user_move.card.player.unwrap(), user_move.card.name, user_move.coords.row.idx(), user_move.coords.col.idx());
     if !user_move.is_combo {
       self.remove_card_from_hand(&user_move);
     }
@@ -515,59 +449,55 @@ impl Game {
 
 
 
-  fn identify_captured_cards(comparisons:Vec<(Coord, Card, isize)>, capturing_player:&Player) -> Vec<(Card, Coord)> {
+  fn identify_captured_cards(comparisons:Vec<(Coord, GameCard, isize)>, capturing_player:&Player) -> Vec<(GameCard, Coord)> {
     comparisons
       .into_iter()
       .filter(|(_coords, card, diff)| (diff > &0) && !(card.player == Some(*capturing_player)))
       .map(|(coords, card, _diff)| (card.clone(), coords))
-      .collect::<Vec<(Card, Coord)>>()
+      .collect::<Vec<(GameCard, Coord)>>()
   }
 
 
 
-  fn capture_cards(&mut self, comparisons:Vec<(Coord, Card, isize)>, capturing_player:&Player) -> () {
+  fn capture_cards(&mut self, comparisons:Vec<(Coord, GameCard, isize)>, capturing_player:&Player) -> () {
     let capturing_moves = Game::identify_captured_cards(comparisons, capturing_player);
 
     for (_card, coords) in capturing_moves {
       self.board.0[coords.row.idx()][coords.col.idx() as usize].0.as_mut().unwrap().player = Some(*capturing_player);
-      match self.turn {
-        Player::Red => self.score_blue.0 -= 1,
-        Player::Blue => self.score_blue.0 += 1
-      }
     }
   }
 
 
 
-  fn calculate_card_diffs(user_move:&Move, comparisons:Vec<(Coord, Card, Side)>) -> Vec<(Coord, Card, isize)> {
-    fn card_diff(board_card:&Card, new_card:&Card, side:&Side) -> isize{
+  fn calculate_card_diffs(user_move:&Move, comparisons:Vec<(Coord, GameCard, Side)>) -> Vec<(Coord, GameCard, isize)> {
+    fn card_diff(board_card:&GameCard, new_card:&GameCard, side:&Side) -> isize{
       match side {
-        Side::Top => new_card.bottom as isize - board_card.top as isize,
-        Side::Right => new_card.left as isize - board_card.right as isize, 
-        Side::Bottom => new_card.top as isize - board_card.bottom as isize, 
-        Side::Left => new_card.right as isize - board_card.left as isize, 
+        Side::Top => new_card.card.stats.bottom as isize - board_card.card.stats.top as isize,
+        Side::Right => new_card.card.stats.left as isize - board_card.card.stats.right as isize, 
+        Side::Bottom => new_card.card.stats.top as isize - board_card.card.stats.bottom as isize, 
+        Side::Left => new_card.card.stats.right as isize - board_card.card.stats.left as isize, 
       }
     }
     comparisons
     .into_iter()
     .map(|(coord, card, side)| {let diff = card_diff(&card, &user_move.card, &side); (coord, card, diff)})
-    .collect::<Vec<(Coord, Card, isize)>>()
+    .collect::<Vec<(Coord, GameCard, isize)>>()
   }
 
 
 
-  fn resolve_card_comparisons(&mut self, user_move:Move, comparisons:Vec<(Coord, Card, Side)>) -> Option<Vec<Move>>{
+  fn resolve_card_comparisons(&mut self, user_move:&Move, comparisons:Vec<(Coord, GameCard, Side)>) -> Option<Vec<Move>>{
     
-    fn card_sum(board_card:&Card, new_card:&Card, side:&Side) -> isize{
+    fn card_sum(board_card:&GameCard, new_card:&GameCard, side:&Side) -> isize{
       match side {
-        Side::Top => new_card.bottom as isize + board_card.top as isize,
-        Side::Right => new_card.left as isize + board_card.right as isize, 
-        Side::Bottom => new_card.top as isize + board_card.bottom as isize, 
-        Side::Left => new_card.right as isize + board_card.left as isize, 
+        Side::Top => new_card.card.stats.bottom as isize + board_card.card.stats.top as isize,
+        Side::Right => new_card.card.stats.left as isize + board_card.card.stats.right as isize, 
+        Side::Bottom => new_card.card.stats.top as isize + board_card.card.stats.bottom as isize, 
+        Side::Left => new_card.card.stats.right as isize + board_card.card.stats.left as isize, 
       }
     }
     
-    println!("comparisons: {:?}", comparisons);
+    //println!("comparisons: {:?}", comparisons);
     match comparisons {
       comparisons if user_move.is_combo => {  
         let captured_cards = Game::identify_captured_cards(Game::calculate_card_diffs(&user_move, comparisons), &user_move.player);
@@ -612,7 +542,7 @@ impl Game {
                   (not_plus_comparisons, plus_comparisons)
                 }
               );
-        println!("non_plus_comparisons: {:?}, plus_comparisons: {:?}", not_plus_comparisons, plus_comparisons);
+        //println!("non_plus_comparisons: {:?}, plus_comparisons: {:?}", not_plus_comparisons, plus_comparisons);
 
         // Resolve all non-plus moves as normal.
         self.capture_cards(Game::calculate_card_diffs(&user_move, not_plus_comparisons), &user_move.player);
@@ -625,7 +555,7 @@ impl Game {
         // Check for, and handle, "Combo"
         match plus_comparisons {
           // Case where Plus was activated; proceed to combo
-          continuations if continuations.len() > 0 => 
+          continuations if continuations.len() > 0 && continuations.iter().any(|(_, card, _)| card.player == Some(user_move.player.other()))=> 
             { 
               // Remove all cards affected by Plus
               for (coords, _, _) in &continuations {
@@ -669,7 +599,7 @@ impl Game {
 
 
 
-  fn compare_move_card_to_neighbors(&mut self, user_move:&Move) -> Vec<(Coord, Card, Side)> {
+  fn compare_move_card_to_neighbors(&mut self, user_move:&Move) -> Vec<(Coord, GameCard, Side)> {
 
     let relative_neighbor_positions = vec![((1,0), Side::Top), ((0,1), Side::Left), ((-1,0), Side::Bottom), ((0,-1), Side::Right)];
     
@@ -684,17 +614,17 @@ impl Game {
           coords
           .map(|x| (x, side.clone()))
           // Filter out moves whose Squares have "None" for a card
-          .and_then(|(coords, side)| self.board.0[coords.row.idx() as usize][coords.col.idx() as usize].0.clone().map(|board_card|  (coords, board_card, side))) 
+          .and_then(|(coords, side)| self.board.0[coords.row.idx() as usize][coords.col.idx() as usize].0.clone().map(|board_card|  (coords, board_card, side)))
         }
       )
-      .collect::<Vec<(Coord, Card, Side)>>();
+      .collect::<Vec<(Coord, GameCard, Side)>>();
 
     valid_neighbors
   }
 
 
 
-  pub fn make_move(&mut self, user_move:Move) -> Option<MoveResult>{
+  pub fn make_move(&mut self, user_move:&Move) -> Option<MoveResult>{
     if self.is_valid_move(&user_move) {
       let is_combo = user_move.is_combo;
 
@@ -704,20 +634,20 @@ impl Game {
       match combos {
         Some(combos) =>
           for combo_move in combos {
-            self.make_move(combo_move);
+            self.make_move(&combo_move);
           }
         None => ()
       }
 
-      if !is_combo { self.flip_turn()};
+      if !is_combo { self.flip_turn()}
 
       // Return result
       if self.open_squares().len() > 0 { Some(MoveResult::NextMove) }
       else {
-        match self.score_blue {
-          score if score.0 == 0 => Some(MoveResult::Finished(GameResult::Draw)),
-          score if score.0 > 0 => Some(MoveResult::Finished(GameResult::Win(Player::Blue))),
-          score if score.0 < 0 => Some(MoveResult::Finished(GameResult::Win(Player::Red))),
+        match self.get_score(&Player::Blue) {
+          score if score == 0 => Some(MoveResult::Finished(GameResult::Draw)),
+          score if score > 0 => Some(MoveResult::Finished(GameResult::Win(Player::Blue))),
+          score if score < 0 => Some(MoveResult::Finished(GameResult::Win(Player::Red))),
           _ => Some(MoveResult::Finished(GameResult::Draw))
         }}
       
@@ -741,10 +671,26 @@ impl GameState for Game {
     self.get_valid_moves()
   }
   fn make_move(&mut self, mov:&Self::Move) {
-    self.make_move(*mov);
+    self.make_move(mov);
   }
 
 }
+
+////////////////////////////////////////////
+////////////////////////////////////////////
+////////////////////////////////////////////
+
+
+const DEFAULT_SCORE: isize = 89;
+const DRAW_SCORE: isize = 80;
+const WIN_SCORE: isize = 120;
+const LOSS_SCORE: isize = 40;
+
+const WIN_POINTS: isize = WIN_SCORE - DEFAULT_SCORE;
+const DRAW_POINTS: isize = DRAW_SCORE - DEFAULT_SCORE;
+const LOSS_POINTS: isize = LOSS_SCORE - DEFAULT_SCORE;
+
+const SAFETY_FACTOR: f32 = 0.2;
 
 impl TranspositionHash for Game {
   fn hash(&self) -> u64 {
@@ -759,29 +705,42 @@ impl TranspositionHash for Game {
   }
 }
 
-struct MyEvaluator;
+
+
+pub struct MyEvaluator;
 impl Evaluator<MyMCTS> for MyEvaluator {
   type StateEvaluation = f32;
 
   fn evaluate_new_state(&self, state: &Game, moves: &Vec<Move>, _: Option<SearchHandle<MyMCTS>>) -> (Vec<()>, f32) {
-    (vec![(); moves.len()], state.score_blue.0 as f32)
+    let score = state.get_score(&Player::Blue);
+    fn score_factor(score:isize) -> f32 {
+      ((score.abs() - 1) as f32 * SAFETY_FACTOR) + 1.0
+    } 
+    let score = match score {
+      score if score > 0 => score_factor(score) * WIN_POINTS as f32,
+      score if score < 0 => score_factor(score) * DRAW_POINTS as f32,
+      score if score == 0 => score_factor(score) * LOSS_POINTS as f32,
+      _ => -100.0
+    };
+    let score_range = (score_factor(4) * WIN_POINTS as f32) - (score_factor(-4) * LOSS_POINTS as f32);
+    (vec![(); moves.len()], (score/score_range) as f32)
   }
 
-fn evaluate_existing_state(&self, state: &<MyMCTS as MCTS>::State, existing_evaln: &Self::StateEvaluation,
-        handle: SearchHandle<MyMCTS>)
-        -> Self::StateEvaluation {
-        state.score_blue.0 as f32
-    }
+  fn evaluate_existing_state(&self, _state: &<MyMCTS as MCTS>::State, existing_evaln: &Self::StateEvaluation,
+          _handle: SearchHandle<MyMCTS>)
+          -> Self::StateEvaluation {
+          *existing_evaln
+      }
 
-fn interpret_evaluation_for_player(&self,
-        evaluation: &Self::StateEvaluation,
-        player: &mcts::Player<MyMCTS>) -> i64 {
-        *evaluation as i64
-    }
+  fn interpret_evaluation_for_player(&self,
+          evaluation: &Self::StateEvaluation,
+          _player: &mcts::Player<MyMCTS>) -> i64 {
+          (*evaluation * 4.0) as i64
+      }
 }
 
 #[derive(Default)]
-struct MyMCTS;
+pub struct MyMCTS;
 impl MCTS for MyMCTS {
   type State = Game;
   type Eval = MyEvaluator;
