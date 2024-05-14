@@ -122,8 +122,8 @@ fn prompt_for_card() -> GameCard {
   }
 }
 
-
 fn build_my_hand(game:&mut Game, player:Player) -> &mut Game{
+
   let cards = HashMap::from(
     [ ("Hildi", GameCard{ card: Card { name: "Hildibrand & Nashu Mhakaracca".to_string(), id: 0, stars: 5, stats: CardStats {  top:1, right:8, bottom:10, left:8, tribe:None}}, player:None})
     , ("Roundrox", GameCard{ card: Card { name: "Roundrox".to_string(), id: 0, stars: 3, stats: CardStats { top: 2, right:2, bottom:8, left: 8, tribe:Some(Tribe::Beastman) }}, player:None})
@@ -132,7 +132,8 @@ fn build_my_hand(game:&mut Game, player:Player) -> &mut Game{
     , ("Ysayle", GameCard{ card: Card { name: "Ysayle".to_string(), id: 0, stars: 3, stats: CardStats { top: 4, right:8, bottom:8, left: 1, tribe:None}}, player:None})
     , ("Therion", GameCard{ card: Card { name: "Thereon".to_string(), id: 0, stars: 5, stats: CardStats { top: 9, right:9, bottom:2, left: 9, tribe:None}}, player:None})
     ]
-  );
+  );  
+
   let game = game.add_card_to_hand(cards["Hildi"].clone(), player);
   let game = game.add_card_to_hand(cards["Roundrox"].clone(), player);
   let game = game.add_card_to_hand(cards["Estinien"].clone(), player);
@@ -195,23 +196,35 @@ fn play_game(game: &mut Game) {
 
 fn main() -> (){
 
-  // let game = game.add_card_to_hand(cards["Hildi"].clone(), Player::Red);
-  // let game = game.add_card_to_hand(cards["Roundrox"].clone(), Player::Red);
-  // let game = game.add_card_to_hand(cards["Estinien"].clone(), Player::Red);
-  // let game = game.add_card_to_hand(cards["Alphinaud and Alisae"].clone(), Player::Red);
-  // let game = game.add_card_to_hand(cards["Ysayle"].clone(), Player::Red);
+  let cards = HashMap::from(
+    [ ("Hildi", GameCard{ card: Card { name: "Hildibrand & Nashu Mhakaracca".to_string(), id: 0, stars: 5, stats: CardStats {  top:1, right:8, bottom:10, left:8, tribe:None}}, player:None})
+    , ("Roundrox", GameCard{ card: Card { name: "Roundrox".to_string(), id: 0, stars: 3, stats: CardStats { top: 2, right:2, bottom:8, left: 8, tribe:Some(Tribe::Beastman) }}, player:None})
+    , ("Estinien", GameCard{ card: Card { name: "Estinien".to_string(), id: 0, stars: 3, stats: CardStats { top: 8, right:8, bottom:2, left: 3, tribe:None}}, player:None})
+    , ("Alphinaud and Alisae", GameCard{ card: Card { name: "Alphinaud and Alisae".to_string(), id: 0, stars: 4, stats: CardStats { top: 9, right:3, bottom:3, left: 9, tribe:None}}, player:None})
+    , ("Ysayle", GameCard{ card: Card { name: "Ysayle".to_string(), id: 0, stars: 3, stats: CardStats { top: 4, right:8, bottom:8, left: 1, tribe:None}}, player:None})
+    , ("Therion", GameCard{ card: Card { name: "Thereon".to_string(), id: 0, stars: 5, stats: CardStats { top: 9, right:9, bottom:2, left: 9, tribe:None}}, player:None})
+    ]
+  );  
 
-  // let game = game.add_card_to_hand(cards["Hildi"].clone(), Player::Blue);
-  // let game = game.add_card_to_hand(cards["Roundrox"].clone(), Player::Blue);
-  // let game = game.add_card_to_hand(cards["Estinien"].clone(), Player::Blue);
-  // let game = game.add_card_to_hand(cards["Alphinaud and Alisae"].clone(), Player::Blue);
-  // let game = game.add_card_to_hand(cards["Ysayle"].clone(), Player::Blue);
+  let mut game = initialize_game();
+
+  let game = game.add_card_to_hand(cards["Hildi"].clone(), Player::Red);
+  let game = game.add_card_to_hand(cards["Roundrox"].clone(), Player::Red);
+  let game = game.add_card_to_hand(cards["Estinien"].clone(), Player::Red);
+  let game = game.add_card_to_hand(cards["Alphinaud and Alisae"].clone(), Player::Red);
+  let game = game.add_card_to_hand(cards["Ysayle"].clone(), Player::Red);
+
+  let game = game.add_card_to_hand(cards["Hildi"].clone(), Player::Blue);
+  let game = game.add_card_to_hand(cards["Roundrox"].clone(), Player::Blue);
+  let game = game.add_card_to_hand(cards["Estinien"].clone(), Player::Blue);
+  let game = game.add_card_to_hand(cards["Alphinaud and Alisae"].clone(), Player::Blue);
+  let game = game.add_card_to_hand(cards["Ysayle"].clone(), Player::Blue);
 
   //let game = game.clone();
   
   // println!("{:?}", mcts.best_move().unwrap())
 
-  explore_cardlist()
+  //explore_cardlist()
 
 }
 

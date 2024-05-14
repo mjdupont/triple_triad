@@ -5,8 +5,6 @@ use serde_json;
 
 use crate::types::{Tribe, CardStats, Card};
 
-
-
 const CARDLIST_API : &str = "https://triad.raelys.com/api/cards";
 const CARDLIST_FILENAME : &str = "cardlist.json";
 
@@ -66,7 +64,7 @@ fn translate_stats(api_stats:ApiStatsWrapper, api_type: ApiType) -> CardStats {
 
 fn translate_card(api_card:ApiCard) -> Card {
   Card 
-  {  id: api_card.id
+  { id: api_card.id
   , stars: api_card.stars
   , name: api_card.name
   , stats: translate_stats(api_card.stats, api_card.r#type)

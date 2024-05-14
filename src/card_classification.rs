@@ -12,6 +12,7 @@ use crate::{types::Card, api};
 /// --> These cards are used for counterplay in matches with Plus/Same, to present fewer Same/Plus 8 surfaces for attack
 /// --> And to capitalize on 1 or 2 point differences for Plus/Same
 
+#[derive(PartialOrd, PartialEq, Eq, Ord, Debug)]
 pub enum ThreeStarMetaClasses 
 { TRCorner
 , BRCorner
@@ -19,7 +20,7 @@ pub enum ThreeStarMetaClasses
 , BLCorner
 , LREight
 , TBEight
-, TripleU
+, TripleT
 , TripleR
 , TripleL
 , TripleB
@@ -56,18 +57,18 @@ pub fn classify_three_star(card:&Card) -> Option<ThreeStarMetaClasses> {
   match card {
     card if card.stars != 3 => None,
     card =>
-      match (card.stats.top, card.stats.right, card.stats.bottom, card.stats.left) {
-        (8, 8, _, _) => Some(ThreeStarMetaClasses::TRCorner),
-        (_, 8, 8, _) => Some(ThreeStarMetaClasses::BRCorner),
-        (_, _, 8, 8) => Some(ThreeStarMetaClasses::BLCorner),
-        (8, _, _, 8) => Some(ThreeStarMetaClasses::TLCorner),
-        (8, _, 8, _) => Some(ThreeStarMetaClasses::LREight),
-        (_, 8, _, 8) => Some(ThreeStarMetaClasses::TBEight),
-        (8, r, _, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleU)
-        (8, r, _, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleU)
-        (8, r, _, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleU)
-        (8, r, _, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleU) 
-        _ => None
+      match (card.stats.top, card.stats.right, card.stats.bottom, card.stats.left) 
+      { (8, 8, _, _) => Some(ThreeStarMetaClasses::TRCorner)
+      , (_, 8, 8, _) => Some(ThreeStarMetaClasses::BRCorner)
+      , (_, _, 8, 8) => Some(ThreeStarMetaClasses::BLCorner)
+      , (8, _, _, 8) => Some(ThreeStarMetaClasses::TLCorner)
+      , (8, _, 8, _) => Some(ThreeStarMetaClasses::LREight)
+      , (_, 8, _, 8) => Some(ThreeStarMetaClasses::TBEight)
+      , (8, r, _, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleT)
+      , (t, 8, b, _) if t+b >= 6+7 => Some(ThreeStarMetaClasses::TripleR)
+      , (_, r, 8, l) if r+l >= 6+7 => Some(ThreeStarMetaClasses::TripleB)
+      , (t, _, b, 8) if t+b >= 6+7 => Some(ThreeStarMetaClasses::TripleL) 
+      , _ => None
       }
   }
 
@@ -109,50 +110,53 @@ pub fn explore_cardlist() -> () {
   println!("Number of 4* cards: {}", four_star_cards.len());
   println!("Number of 5* cards: {}", five_star_cards.len());
 
-  let three_star_cards_ordered = 
-    three_star_cards
-    .clone()
-    .into_iter()
-    .map(|card| (sum_value_scores(&card), card))
-    .sorted_by(|(c1s, _card1), (c2s, _card2)| Ord::cmp(c1s, c2s))
-    .collect::<Vec<(usize, Card)>>();
-
-    for card in &three_star_cards_ordered {
-      println!("{:?}", card)
-    }
-
-  let three_star_cards_ordered_sq = 
-    three_star_cards
-    .clone()
-    .into_iter()
-    .map(|card| (square_value_scores(&card), card))
-    .sorted_by(|(c1s, _card1), (c2s, _card2)| Ord::cmp(c1s, c2s))
-    .collect::<Vec<(usize, Card)>>();
-
-  for card in &three_star_cards_ordered_sq {
-    println!("{:?}", card)
-  }
-
-  let corner_eights = 
-    three_star_cards
-    .clone()
-    .into_iter()
-    .filter(is_corner_eight)
-    .collect::<Vec<Card>>();
-  
-  for card in &corner_eights {
-    println!("{:?}", card)
-  }
-
-  // let three_star_cards_special =
+  // let three_star_cards_ordered = 
   //   three_star_cards
   //   .clone()
   //   .into_iter()
-  //   .map(|card| )
-  // let mut game = initialize_game();
+  //   .map(|card| (sum_value_scores(&card), card))
+  //   .sorted_by(|(c1s, _card1), (c2s, _card2)| Ord::cmp(c1s, c2s))
+  //   .collect::<Vec<(usize, Card)>>();
 
-  // play_game(&mut game)
+  //   for card in &three_star_cards_ordered {
+  //     println!("{:?}", card)
+  //   }
 
+  // let three_star_cards_ordered_sq = 
+  //   three_star_cards
+  //   .clone()
+  //   .into_iter()
+  //   .map(|card| (square_value_scores(&card), card))
+  //   .sorted_by(|(c1s, _card1), (c2s, _card2)| Ord::cmp(c1s, c2s))
+  //   .collect::<Vec<(usize, Card)>>();
 
+  // for card in &three_star_cards_ordered_sq {
+  //   println!("{:?}", card)
+  // }
 
+  // let corner_eights = 
+  //   three_star_cards
+  //   .clone()
+  //   .into_iter()
+  //   .filter(is_corner_eight)
+  //   .collect::<Vec<Card>>();
+  
+  // for card in &corner_eights {
+  //   println!("{:?}", card)
+  // }
+
+  let three_star_cards_by_group =
+    three_star_cards
+    .clone()
+    .into_iter()
+    .sorted_by(|c1, c2| Ord::cmp(&classify_three_star(c1), &classify_three_star(c2)))
+    .group_by(|card| classify_three_star(card));
+
+  for (key, cards) in &three_star_cards_by_group { 
+    let cards = cards.into_iter().collect::<Vec<Card>>();
+    println!("Number of {} Cards: {}", key.map(|class| format!("{:?}", class)).unwrap_or("Not meta".to_string()), cards.len());
+    for card in cards {
+      println!("{:?}", card)
+    }
+  }
 }
